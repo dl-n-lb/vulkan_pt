@@ -348,6 +348,27 @@ int main(void) {
   tlas = vkrt_create_tlas(device, allocator, graphics_queue, immediate_buf,
 			  geom_count, blases, transform);
 
+  // load the hdri
+  const char *env_hdri_path = "./assets/env_hdri.hdr";
+  int w, h, c;
+  float *hdri_data = stbi_loadf(env_hdri_path, &w, &h, &c, 4);
+  VkExtent3D hdri_dims = {w, h, 1};
+  vkw_image hdri = vkw_image_create_data(device, allocator, immediate_buf, graphics_queue,
+					 hdri_dims, VK_FORMAT_R32G32B32A32_SFLOAT,
+					 VK_IMAGE_USAGE_STORAGE_BIT |
+					 VK_IMAGE_USAGE_SAMPLED_BIT, false,
+					 hdri_data);
+  // CHECK HDRI VALUES
+  /*
+  for (size_t i = 0; i < w * h * 4; ++i) {
+    float v = hdri_data[i];
+    if (v > 10.f) {
+      printf("%f\n", v);
+    }
+  }
+  */
+  free(hdri_data);
+
   // descriptor set layout
   VkDescriptorSetLayout rt_layout;
   VkDescriptorSet rt_set;
@@ -359,8 +380,10 @@ int main(void) {
     vkw_descriptor_layout_builder_add(&b, 3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
     vkw_descriptor_layout_builder_add2(&b, 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				       model.texture_count);
+    vkw_descriptor_layout_builder_add(&b, 5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     rt_layout = vkw_descriptor_layout_build(&b, device, VK_SHADER_STAGE_RAYGEN_BIT_KHR
-					    | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+					    | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+					    | VK_SHADER_STAGE_MISS_BIT_KHR); // TEMP
 
     rt_set = 
       vkw_descriptor_allocator_alloc(&ds_alloc, device, rt_layout);
@@ -371,14 +394,36 @@ int main(void) {
     vkrt_ds_writer_add_buffer(&writer, 2, geometry_nodes.buffer, 0, VK_WHOLE_SIZE);
     vkrt_ds_writer_add_buffer(&writer, 3, model.materials_buffer.buffer, 0, VK_WHOLE_SIZE);
     vkrt_ds_writer_add_sampled_images(&writer, 4, model.texture_count, model.textures);
+    vkrt_ds_writer_add_sampled_images(&writer, 5, 1, &hdri);
 
     vkrt_ds_writer_write(device, writer);
 
     vkrt_ds_writer_free(&writer);
   }
+
+  // TODO: why doesn't creating a 2nd layout for the miss shader work?
+  /*  
+  // descriptor set layout for the miss shader - has the hdri
+  VkDescriptorSetLayout rt_miss_layout;
+  VkDescriptorSet rt_miss_set;
+  { 
+    vkw_descriptor_layout_builder b = {};
+    vkw_descriptor_layout_builder_add(&b, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    rt_miss_layout = vkw_descriptor_layout_build(&b, device, VK_SHADER_STAGE_MISS_BIT_KHR);
+
+    rt_miss_set = vkw_descriptor_allocator_alloc(&ds_alloc, device, rt_miss_layout);
+
+    vkrt_ds_writer writer = vkrt_ds_writer_create(rt_miss_set, 10);
+    vkrt_ds_writer_add_sampled_images(&writer, 0, 1, &hdri);
+    vkrt_ds_writer_write(device, writer);
+    vkrt_ds_writer_free(&writer);
+  }
+  */
+
   // pipeline layout
   VkPipelineLayout rt_pipeline_layout;
   {
+    // VkDescriptorSetLayout ds_layouts[2] = { rt_layout, rt_miss_layout };
     VkPipelineLayoutCreateInfo pipeline_layout_info = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
       .setLayoutCount = 1,

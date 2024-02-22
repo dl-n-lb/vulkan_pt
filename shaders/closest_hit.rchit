@@ -13,6 +13,8 @@ layout(location = 0) rayPayloadInEXT ray_payload payload;
 hitAttributeEXT vec2 attribs;
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT tlas;
+// TODO: light bvh?
+//layout(binding = 1, set = 0) uniform accelerationStructureEXT light_tlas;
 
 struct geometry_node {
   uint64_t vertex_buffer_address;
@@ -35,8 +37,6 @@ layout(binding = 3, set = 0) buffer materials_t {
 } materials;
 
 layout(binding = 4, set = 0) uniform sampler2D textures[];
-
-layout(binding = 5, set = 0) uniform vec3 light_positions[];
 
 material_t get_material(geometry_node geom) {
   uint index = geom.material_index;

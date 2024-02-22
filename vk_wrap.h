@@ -273,13 +273,17 @@ vkw_image vkw_image_create(VkDevice device, VmaAllocator alloc, VkExtent3D dims,
   return result;
 }
 
-// will assume the data is rgba8 for colour or 32bit fp for depth
+// will assume the data is r8g8b8a8
+// if the format isn't set to R32G32B32A32_SFLOAT
 vkw_image vkw_image_create_data(VkDevice device, VmaAllocator allocator,
 				vkw_immediate_submit_buffer immediate,
 				VkQueue imm_queue, VkExtent3D dims, VkFormat fmt,
 				VkImageUsageFlags flags, bool mipmap, void *data) {
   flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;  
   size_t data_size = dims.depth * dims.width * dims.height * 4; // r,g,b,a
+  if (fmt == VK_FORMAT_R32G32B32A32_SFLOAT) {
+    data_size *= 4;
+  }
 
   VkBuffer buffer;
   VmaAllocationInfo alloc_info;

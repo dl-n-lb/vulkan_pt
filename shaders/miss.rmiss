@@ -6,21 +6,18 @@
 
 layout(location = 0) rayPayloadInEXT ray_payload payload;
 
+layout(binding = 5, set = 0) uniform sampler2D hdri;
+
+#define PI 3.141592653589
+#define _2PI (2.0 * PI)
+#define INV_PI (1.0 / PI)
+#define INV_2PI (1.0 / _2PI)
+
 void main() {
-
+  vec2 uv = vec2((PI + atan(payload.rd.z, payload.rd.x)) * INV_2PI,
+		 acos(payload.rd.y) * INV_PI);
+  
   payload.stop = true;
-  payload.attenuated_colour *= vec3(0);
-  /*
-  if (payload.depth == 0) {
-    payload.stop = true;
-    payload.attenuated_colour = vec3(0);
-  }
-  vec3 light_position = vec3(20, 20, 20);
-  float light_dist = length(light_position - payload.ro)/10;
-  vec3 light_color = vec3(5) * 1.0 / (light_dist * light_dist);
-  float light_contrib = max(dot(normalize(light_position), gl_WorldRayDirectionEXT), 0.0001);
-
-  payload.attenuated_colour *= vec3(light_color * light_contrib);
-  payload.stop = true;
-  */
+  payload.hit_light = true;
+  payload.attenuated_colour *= pow(texture(hdri, uv).xyz, vec3(0.5));
 }

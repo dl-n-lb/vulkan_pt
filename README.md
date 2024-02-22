@@ -3,7 +3,8 @@ This is the continuation of work on [`vk_rt_simple`](https://github.com/mattdrin
 
 # Progress
 - [x] Normal Maps
-- [ ] Fix lighting bugs
+- [x] Fix lighting bugs
+- [x] HDRI to replace **void**
 - [ ] Light Sampling
 - [ ] MIS
 - [ ] Reorganise shaders into reusable files
