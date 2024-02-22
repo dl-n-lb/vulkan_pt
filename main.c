@@ -31,7 +31,7 @@ static uint32_t window_height = 720;
 #include "vk_rt_help.h"
 
 typedef struct {
-  float e[4];
+  float e[4]; // TODO: Get rid of this dummy test variable
   float view[16];
   float proj[16];
   uint32_t frame_no;
@@ -44,6 +44,12 @@ typedef struct {
   uint64_t index_buffer_address;
   uint32_t material_index;
 } geometry_node;
+
+typedef struct {
+  uint32_t geometry_node;
+  uint32_t tri_count;
+  //  float __pad[6];
+} light_node_info;
 
 vkh_swapchain build_swapchain(VkDevice device,
 			      VkPhysicalDevice physical_device,
@@ -294,30 +300,46 @@ int main(void) {
   }
 
   geometry_node *geom_nodes = calloc(sizeof(geometry_node), geom_count);
-
+  uint32_t light_bufs_count = 1; // start at 1 to leave space 0 for the count of lights
+  light_node_info *light_geoms = calloc(sizeof(*light_geoms), geom_count + 1);
   size_t idx = 0;
   for (uint32_t i = 0; i < model.mesh_count; ++i) {
     vkrt_mesh mesh = model.meshes[i];
-    for (uint32_t j = 0; j < mesh.primitive_count; ++j) {      
+    for (uint32_t j = 0; j < mesh.primitive_count; ++j) {
       geom_nodes[idx++] = (geometry_node) {
 	mesh.primitives[j].vertex_buffer.device_address,
 	mesh.primitives[j].index_buffer.device_address,
 	mesh.primitives[j].material_index,
       };
+      // TODO / TEMP : lights have material index 1
+      if (mesh.primitives[j].material_index == 1) {
+	light_geoms[light_bufs_count++] = (light_node_info) {
+	  .geometry_node = idx - 1,
+	  .tri_count = mesh.primitives[j].primitive_count,
+	};
+      }
     }
   }
 
+  // yep (see above)
+  light_geoms[0] = (light_node_info) { .geometry_node = light_bufs_count };
+  
   VkBufferUsageFlagBits usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
   
   vkrt_memory geometry_nodes =
     vkrt_allocate_memory(device, allocator, geom_count * sizeof(*geom_nodes),
 			 geom_nodes, usage);
+
+  vkrt_memory light_indices =
+    vkrt_allocate_memory(device, allocator, light_bufs_count * sizeof(*light_geoms),
+			 light_geoms, usage);
       
   printf("Loaded: %lu meshes\n", geom_count);
   fflush(stdout);
 
   free(geom_nodes);
+  free(light_geoms);
   
   vkrt_as *blases = calloc(sizeof(vkrt_as), geom_count);
 
@@ -381,6 +403,7 @@ int main(void) {
     vkw_descriptor_layout_builder_add2(&b, 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				       model.texture_count);
     vkw_descriptor_layout_builder_add(&b, 5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    vkw_descriptor_layout_builder_add(&b, 6, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
     rt_layout = vkw_descriptor_layout_build(&b, device, VK_SHADER_STAGE_RAYGEN_BIT_KHR
 					    | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
 					    | VK_SHADER_STAGE_MISS_BIT_KHR); // TEMP
@@ -388,13 +411,14 @@ int main(void) {
     rt_set = 
       vkw_descriptor_allocator_alloc(&ds_alloc, device, rt_layout);
 
-    vkrt_ds_writer writer = vkrt_ds_writer_create(rt_set, 2 * model.texture_count);
+    vkrt_ds_writer writer = vkrt_ds_writer_create(rt_set, 2 * model.texture_count + 10);
     vkrt_ds_writer_add_as(&writer, 0, &tlas.as);
     vkrt_ds_writer_add_image(&writer, 1, draw_image.view);
     vkrt_ds_writer_add_buffer(&writer, 2, geometry_nodes.buffer, 0, VK_WHOLE_SIZE);
     vkrt_ds_writer_add_buffer(&writer, 3, model.materials_buffer.buffer, 0, VK_WHOLE_SIZE);
     vkrt_ds_writer_add_sampled_images(&writer, 4, model.texture_count, model.textures);
     vkrt_ds_writer_add_sampled_images(&writer, 5, 1, &hdri);
+    vkrt_ds_writer_add_buffer(&writer, 6, light_indices.buffer, 0, VK_WHOLE_SIZE);
 
     vkrt_ds_writer_write(device, writer);
 
@@ -753,6 +777,8 @@ int main(void) {
 
   vkDeviceWaitIdle(device);
 
+
+  vkw_image_destroy(device, allocator, hdri);
   vkrt_destroy_as(device, allocator, tlas);
   for(uint32_t i = 0; i < geom_count; ++i) {
     vkrt_destroy_as(device, allocator, blases[i]);
@@ -762,6 +788,7 @@ int main(void) {
   vkrt_memory_free(allocator, sbt_rmiss_buffer);
   vkrt_memory_free(allocator, sbt_rchit_buffer);
   vkrt_memory_free(allocator, geometry_nodes);
+  vkrt_memory_free(allocator, light_indices);
 
   vkrt_free_model(device, allocator, model);
     

@@ -2,7 +2,7 @@
 #extension GL_EXT_ray_tracing : enable
 #extension GL_GOOGLE_include_directive : require
 
-#include "common.glsl"
+#include "common/structs.glsl"
 
 layout(location = 0) rayPayloadInEXT ray_payload payload;
 
@@ -17,7 +17,7 @@ void main() {
   vec2 uv = vec2((PI + atan(payload.rd.z, payload.rd.x)) * INV_2PI,
 		 acos(payload.rd.y) * INV_PI);
   
+  payload.attenuated_colour *= pow(texture(hdri, uv).xyz, vec3(0.5));
   payload.stop = true;
   payload.hit_light = true;
-  payload.attenuated_colour *= pow(texture(hdri, uv).xyz, vec3(0.5));
 }

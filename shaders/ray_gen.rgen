@@ -2,7 +2,8 @@
 #extension GL_EXT_ray_tracing          : enable
 #extension GL_GOOGLE_include_directive : require
 
-#include "common.glsl"
+#include "common/structs.glsl"
+#include "common/random.glsl"
 
 layout(location = 0) rayPayloadEXT ray_payload payload;;
 
@@ -17,12 +18,9 @@ layout (push_constant) uniform constants {
   uint frame_no;
 } pcs;
 
-#include "random.glsl"
-
 #define G_TMIN 0.001
 #define G_TMAX 50.0
 #define G_MAXDEPTH 3
-
 
 void ray_trace() {
   payload.attenuated_colour = vec3(1);
