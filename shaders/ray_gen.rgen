@@ -1,0 +1,85 @@
+#version 460
+#extension GL_EXT_ray_tracing          : enable
+#extension GL_GOOGLE_include_directive : require
+
+#include "common.glsl"
+
+layout(location = 0) rayPayloadEXT ray_payload payload;;
+
+layout(binding = 0, set = 0) uniform accelerationStructureEXT as;
+
+layout(binding = 1, rgba32f) uniform image2D img;
+
+layout (push_constant) uniform constants {
+  vec4 light_pos;
+  mat4 view;
+  mat4 proj;
+  uint frame_no;
+} pcs;
+
+#include "random.glsl"
+
+#define G_TMIN 0.001
+#define G_TMAX 50.0
+#define G_MAXDEPTH 3
+
+
+void ray_trace() {
+  payload.attenuated_colour = vec3(1);
+  payload.stop = false;
+  payload.hit_light = false;
+  payload.depth = 0;
+  while (payload.depth < G_MAXDEPTH) {
+    traceRayEXT(as, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0, payload.ro,
+		G_TMIN, payload.rd, G_TMAX, 0);
+
+    if (payload.stop) {
+      break;
+    }
+  }
+  if (!payload.hit_light) {
+    payload.attenuated_colour *= vec3(0);
+  }
+}
+
+void main() {
+  payload.seed = get_seed(ivec2(gl_LaunchIDEXT.xy) * ivec2(pcs.frame_no + 132, 1));
+  //uvec2 ads = gl_LaunchSizeEXT.xy - gl_LaunchIDEXT.xy;
+  //payload.seed = ads.y * gl_LaunchSizeEXT.x + ads.x * (pcs.frame_no + 121) + 2931;
+  
+  //vec3 rd = normalize(vec3(d.x * aspect, d.y, 1));
+  const int samples = 1;
+
+  vec3 accumulated_col = vec3(0);
+  
+  for (int i = 0; i < samples; ++i) {
+    payload.seed = get_seed(ivec2(payload.seed, 129 + gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x));
+    float r1 = rand(payload.seed);
+    float r2 = rand(payload.seed);
+    // r1 = 0.5; r2 = 0.5; // for testing
+    // jitter starting point by uniform random number
+    vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(r1, r2);
+    vec2 uv = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+    vec2 d = uv * 2.0 - 1.0;
+    //float aspect = float(gl_LaunchSizeEXT.x) / float(gl_LaunchSizeEXT.y);
+  
+    float aspect = 1;
+    vec4 ro4 = pcs.view * vec4(0, 0, 0, 1);
+    payload.ro = ro4.xyz;
+    vec4 target = pcs.proj * vec4(d.x, d.y, 1, 1);
+    vec4 rd4 = pcs.view * vec4(normalize(target.xyz / target.w), 0);
+    payload.rd = rd4.xyz;
+    
+    payload.attenuated_colour = vec3(1);
+    ray_trace();
+    accumulated_col += payload.attenuated_colour;
+  }
+  accumulated_col /= float(samples);
+  if (pcs.frame_no == 0) {
+    imageStore(img, ivec2(gl_LaunchIDEXT), vec4(accumulated_col, 1.0));
+  } else {
+    vec4 prev_colour = imageLoad(img, ivec2(gl_LaunchIDEXT)) * float(pcs.frame_no);
+    vec4 new_colour = (prev_colour + vec4(accumulated_col, 1.0)) / float(pcs.frame_no + 1);
+    imageStore(img, ivec2(gl_LaunchIDEXT), new_colour);
+  }  
+}
