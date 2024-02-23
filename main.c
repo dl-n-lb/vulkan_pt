@@ -289,8 +289,8 @@ int main(void) {
 
   //const char *asset_path = "./assets/spheres_cube_material.glb";
   //const char *asset_path = "./assets/sponza/Sponza.gltf";
-  //const char *asset_path = "./assets/structure.glb";
-  const char *asset_path = "./assets/sponza_glb.glb";
+  const char *asset_path = "./assets/structure.glb";
+  //const char *asset_path = "./assets/sponza_glb.glb";
   vkrt_model model = vkrt_load_gltf_model(device, allocator, graphics_queue,
 					  immediate_buf, asset_path);
   
@@ -336,6 +336,7 @@ int main(void) {
 			 light_geoms, usage);
       
   printf("Loaded: %lu meshes\n", geom_count);
+  printf("Explicit Lights: %u\n", light_bufs_count);
   fflush(stdout);
 
   free(geom_nodes);
